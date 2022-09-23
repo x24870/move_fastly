@@ -32,9 +32,6 @@ init_counter:
 incr_counter:
 	aptos move run --function-id '${ACCOUNT}::MyCounter::incr_counter' --profile=${PROFILE}
 
-script_incr_counter:
-	aptos move run-script --script-path scripts/counter_incr.move --sender-account=${ACCOUNT} --profile=${PROFILE}
-
 query_module:
 	aptos account list --query modules --account ${ACCOUNT} --profile ${PROFILE}
 
@@ -54,3 +51,10 @@ call_contract:
 	aptos move run --function-id :::: --profile ${PROFILE}
 
 
+### execute move scripts
+script_incr_counter:
+	# there is some issue on 'run-script'
+	# aptos move run-script --script-path scripts/counter_incr.move --sender-account=${ACCOUNT} --profile=${PROFILE}
+	# execute through aptos python sdk
+	# move to sdk folder: $cd sdk
+	poetry run python -m examples.incr_counter
