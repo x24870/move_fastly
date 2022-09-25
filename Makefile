@@ -26,6 +26,9 @@ compile_hello:
 compile_counter:
 	aptos move compile --package-dir counter --named-addresses MyAddr="default"
 
+compile_bridge:
+	aptos move compile --package-dir bridge  --named-addresses MoonCoin=${ACCOUNT}
+
 init_counter:
 	aptos move run --function-id '${ACCOUNT}::MyCounter::init_counter' --profile=${PROFILE}
 

@@ -1,0 +1,9 @@
+[package]
+name = "Bridge"
+version = "0.0.0"
+
+[addresses]
+MoonCoin = "_"
+
+[dependencies]
+AptosFramework = { local = "../aptos-framework" }
