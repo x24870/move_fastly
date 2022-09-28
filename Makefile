@@ -29,6 +29,9 @@ compile_counter:
 compile_bridge:
 	aptos move compile --package-dir bridge  --named-addresses MoonCoin=${ACCOUNT}
 
+test_bridge:
+	aptos move test --package-dir bridge --named-addresses MoonCoin=default
+
 init_counter:
 	aptos move run --function-id '${ACCOUNT}::MyCounter::init_counter' --profile=${PROFILE}
 

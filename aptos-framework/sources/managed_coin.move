@@ -97,6 +97,22 @@ module aptos_framework::managed_coin {
         coin::register<CoinType>(account);
     }
 
+    public fun get_mint_cap<CoinType>(account: &signer): 
+    MintCapability<CoinType> acquires Capabilities {
+        let account_addr = signer::address_of(account);
+        assert!(exists<Capabilities<CoinType>>(account_addr), 0);
+        let caps = borrow_global<Capabilities<CoinType>>(account_addr);
+        caps.mint_cap
+    }
+
+    public fun get_burn_cap<CoinType>(account: &signer): 
+    BurnCapability<CoinType> acquires Capabilities {
+        let account_addr = signer::address_of(account);
+        assert!(exists<Capabilities<CoinType>>(account_addr), 0);
+        let caps = borrow_global<Capabilities<CoinType>>(account_addr);
+        caps.burn_cap
+    }
+
     //
     // Tests
     //
