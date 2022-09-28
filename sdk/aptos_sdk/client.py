@@ -321,6 +321,21 @@ class RestClient:
         royalty_points_per_million: int,
     ) -> str:  # <:!:create_token
         transaction_arguments = [
+            ## script args:
+            # account: &signer,
+            # collection: String,
+            # name: String,
+            # description: String,
+            # balance: u64,
+            # maximum: u64,
+            # uri: String,
+            # royalty_payee_address: address,
+            # royalty_points_denominator: u64,
+            # royalty_points_numerator: u64,
+            # mutate_setting: vector<bool>,
+            # property_keys: vector<String>,
+            # property_values: vector<vector<u8>>,
+            # property_types: vector<String>
             TransactionArgument(collection_name, Serializer.str),
             TransactionArgument(name, Serializer.str),
             TransactionArgument(description, Serializer.str),
@@ -519,6 +534,19 @@ class RestClient:
         )  # <:!:read_token_data_table
 
     def get_collection(self, creator: AccountAddress, collection_name: str) -> Any:
+        token_data = self.account_resource(creator, "0x3::token::Collections")["data"][
+            "collection_data"
+        ]["handle"]
+
+        return self.get_table_item(
+            token_data,
+            "0x1::string::String",
+            "0x3::token::CollectionData",
+            collection_name,
+        )
+
+
+    def get_collection_supply(self, creator: AccountAddress, collection_name: str) -> Any:
         token_data = self.account_resource(creator, "0x3::token::Collections")["data"][
             "collection_data"
         ]["handle"]

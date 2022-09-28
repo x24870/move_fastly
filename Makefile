@@ -61,3 +61,13 @@ script_incr_counter:
 	# execute through aptos python sdk
 	# move to sdk folder: $cd sdk
 	poetry run python -m examples.incr_counter
+
+### nft
+create_collection:
+	poetry run python -m examples.create_collection
+
+create_token:
+	poetry run python -m examples.create_token
+
+transfer:
+	echo "todo"
