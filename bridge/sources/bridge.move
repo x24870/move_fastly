@@ -1,16 +1,28 @@
 module MoonCoin::bridge {
     use std::signer;
+    use std::option::{Self};
+    use aptos_std::table::{Self, Table};
+    use aptos_std::event::{Self, EventHandle};
     use MoonCoin::moon_coin::MoonCoin;
     use aptos_framework::coin::{Self, Coin, BurnCapability, MintCapability};
     use aptos_framework::managed_coin;
+    use aptos_framework::account;
 
     /// Address of the owner of this module
     const MODULE_OWNER: address = @MoonCoin;
 
     /// Error codes
-    const ENOT_MODULE_OWNER: u64 = 0;
-    const ENOT_BRIDGE_OWNER: u64 = 1;
-    const ENO_CAPABILITIES: u64 = 2;
+    const ENOT_MODULE_OWNER:          u64 = 0;
+    const ENOT_BRIDGE_OWNER:          u64 = 1;
+    const ENO_CAPABILITIES:           u64 = 2;
+    const ECOIN_NOT_INIT:             u64 = 3;
+    const ENOT_ENOUGH_AMOUNT:         u64 = 4;
+    const ETX_HAS_OUT:                u64 = 5;
+    const ETX_NOT_EXIST:              u64 = 6;
+    const ETX_NOT_UNLOCK:             u64 = 7;
+    const EACCOUNT_NOT_REGISTER_COIN: u64 = 7;
+    const EMINT_FAIL:                 u64 = 8;
+    const ESUPPLY_ERR:                u64 = 9;
 
     /// MoonCoin capabilities, set during genesis and stored in @CoreResource account.
     /// This allows the Bridge module to mint coins.
@@ -30,11 +42,25 @@ module MoonCoin::bridge {
         vault: Coin<MoonCoin>,
         fee_collector: Coin<MoonCoin>,
         mooncoin_caps: MoonCoinCapabilities,
+        freezed: bool,
+        unlocked: Table<vector<u8>, bool>,
+        bridge_out_events: EventHandle<BridgeOutEvent>,
+        bridge_in_events: EventHandle<BridgeInEvent>,
     }
 
     // initialzation when module published
     fun init_module(module_owner: &signer) {
         create_administrator(module_owner);
+    }
+
+    /// Event emitted when some amount of a coin is send into the bridge.
+    struct BridgeOutEvent has drop, store {
+        amount: u64,
+    }
+
+    /// Event emitted when some amount of a coin is send out from the bridge.
+    struct BridgeInEvent has drop, store {
+        amount: u64,
     }
 
     public fun is_administrator(account_addr: address): bool {
@@ -78,12 +104,84 @@ module MoonCoin::bridge {
             vault: coin::zero<MoonCoin>(),
             fee_collector: coin::zero<MoonCoin>(),
             mooncoin_caps: mooncoin_caps,
+            freezed: false,
+            unlocked: table::new<vector<u8>, bool>(),
+            bridge_out_events: account::new_event_handle<BridgeOutEvent>(destination),
+            bridge_in_events: account::new_event_handle<BridgeInEvent>(destination),
         };
 
         move_to(destination, bridge_admin);
     }
 
+    // Mint new token then send out from the bridge
+    public entry fun bridge_out(
+        admin: &signer, amount: u64, dst_addr: address, flow_tx_hash: vector<u8>)
+        acquires BridgeAdmin {
+        let admin_addr = signer::address_of(admin);
+        assert!(is_bridge_admin(admin_addr), ENOT_MODULE_OWNER);
 
+        // check allowed amount is enough
+        let bridge_admin = borrow_global_mut<BridgeAdmin>(admin_addr);
+        if (bridge_admin.allowed_amount < amount) abort ENOT_ENOUGH_AMOUNT;
+
+        // minus allowed amount
+        bridge_admin.allowed_amount = bridge_admin.allowed_amount - amount;
+
+        // checking has tx hash unlocked // TODO: Check if default false is valid?
+        // let unlocked = table::borrow_mut<vector<u8>, bool>(
+        //     &mut bridge_admin.unlocked, flow_tx_hash);
+        let unlocked = table::borrow_mut_with_default<vector<u8>, bool>(
+            &mut bridge_admin.unlocked, flow_tx_hash, false);
+
+        if (*unlocked == true) abort ETX_HAS_OUT;
+        *unlocked = true;
+
+        // check account has registered the coin
+        assert!(coin::is_account_registered<MoonCoin>(dst_addr), EACCOUNT_NOT_REGISTER_COIN);
+
+        // mint
+        managed_coin::mint_with_cap<MoonCoin>(
+            dst_addr, amount, &bridge_admin.mooncoin_caps.mint_cap);
+
+        // emit teleport out event
+        event::emit_event<BridgeOutEvent>(
+            &mut bridge_admin.bridge_out_events,
+            BridgeOutEvent { amount: amount },
+        );
+    }
+
+    #[test_only]
+    fun initialize_mooncoin(
+        module_owner: &signer,
+        decimals: u8,
+        monitor_supply: bool,
+    ) {
+        managed_coin::initialize<MoonCoin>(
+            module_owner,
+            b"Moon Coin",
+            b"MOON",
+            decimals,
+            monitor_supply
+        );
+    }
+
+        #[test_only]
+    fun initialize_bridge_admin(
+        module_owner: &signer,
+        admin: &signer,
+    ) {
+        let mint_cap = managed_coin::get_mint_cap<MoonCoin>(module_owner);
+        let burn_cap = managed_coin::get_burn_cap<MoonCoin>(module_owner);
+
+        create_bridge_admin(
+            module_owner,
+            admin,
+            0, // lock fee
+            0, // unlock fee
+            100, // allowed amount
+            mint_cap,
+            burn_cap);
+    }
 
     #[test(module_owner = @MoonCoin)]
     public entry fun test_create_administrator(module_owner: signer) {
@@ -95,31 +193,56 @@ module MoonCoin::bridge {
 
     #[test(module_owner = @MoonCoin, destination = @0xa11ce)]
     public entry fun test_create_bridge_admin(
-        module_owner: signer, destination: signer) {
+        module_owner: signer, destination: signer) acquires BridgeAdmin {
+        let dest_addr = signer::address_of(&destination);
+        aptos_framework::account::create_account_for_test(dest_addr);
+        aptos_framework::account::create_account_for_test(signer::address_of(&module_owner));
 
-        managed_coin::initialize<MoonCoin>(
-            &module_owner,
-            b"Moon Coin",
-            b"MOON",
-            6,
-            true
-        );
-
+        initialize_mooncoin(&module_owner, 6, true);
         assert!(coin::is_coin_initialized<MoonCoin>(), 0);
 
-        let mint_cap = managed_coin::get_mint_cap<MoonCoin>(&module_owner);
-        let burn_cap = managed_coin::get_burn_cap<MoonCoin>(&module_owner);
-
-        create_bridge_admin(
-            &module_owner,
-            &destination,
-            0,
-            0,
-            100,
-            mint_cap,
-            burn_cap);
-
-        let dest_addr = signer::address_of(&destination);
+        initialize_bridge_admin(&module_owner, &destination);
         assert!(is_bridge_admin(dest_addr), ENOT_MODULE_OWNER);
+
+        // check bridge admin is able to mint
+        let bridge_admin = borrow_global<BridgeAdmin>(dest_addr);
+        managed_coin::register<MoonCoin>(&destination);
+        managed_coin::mint_with_cap<MoonCoin>(
+        dest_addr, 100, &bridge_admin.mooncoin_caps.mint_cap);
+
+        assert!(coin::balance<MoonCoin>(dest_addr) == 100, EMINT_FAIL);
+    }
+
+    #[test(module_owner = @MoonCoin, admin = @0xa11ce, user = @0xb0b)]
+    public entry fun test_bridge_out (
+        module_owner: signer, admin: signer, user: signer) acquires BridgeAdmin {
+        let admin_addr = signer::address_of(&admin);
+        let user_addr = signer::address_of(&user);
+        aptos_framework::account::create_account_for_test(admin_addr);
+        aptos_framework::account::create_account_for_test(user_addr);
+        aptos_framework::account::create_account_for_test(signer::address_of(&module_owner));
+
+        initialize_mooncoin(&module_owner, 6, true);
+        assert!(coin::is_coin_initialized<MoonCoin>(), ECOIN_NOT_INIT);
+
+        initialize_bridge_admin(&module_owner, &admin);
+        assert!(is_bridge_admin(admin_addr), ENOT_MODULE_OWNER);
+        
+        // user register mooncoin
+        managed_coin::register<MoonCoin>(&user);
+
+        let txhash = b"0xf103"; 
+        bridge_out(&admin, 100, user_addr, txhash);
+
+        // check user has received the minted coins
+        assert!(coin::balance<MoonCoin>(user_addr) == 100, EMINT_FAIL);
+        
+        // check the tx hash been marked as unlocked
+        let bridge_admin = borrow_global<BridgeAdmin>(admin_addr);
+        let is_unlocked = table::borrow<vector<u8>, bool>(&bridge_admin.unlocked, txhash);
+        assert!(*is_unlocked == true, ETX_NOT_UNLOCK);
+
+        // check supply increased
+        assert!(*option::borrow(&coin::supply<MoonCoin>()) == 100, ESUPPLY_ERR);
     }
 }

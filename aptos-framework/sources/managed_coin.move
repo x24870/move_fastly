@@ -91,6 +91,25 @@ module aptos_framework::managed_coin {
         coin::deposit(dst_addr, coins_minted);
     }
 
+    /// Create new coins `CoinType` and deposit them into dst_addr's account.
+    public entry fun mint_with_cap<CoinType>(
+        dst_addr: address,
+        amount: u64,
+        mint_cap: &MintCapability<CoinType>,
+    ) {
+        // let account_addr = signer::address_of(account);
+
+        // assert!(
+        //     exists<Capabilities<CoinType>>(account_addr),
+        //     error::not_found(ENO_CAPABILITIES),
+        // );
+
+        // let capabilities = borrow_global<Capabilities<CoinType>>(account_addr);
+        let coins_minted = coin::mint(amount, mint_cap);
+        // let coins_minted = coin::mint(amount, &capabilities.mint_cap);
+        coin::deposit(dst_addr, coins_minted);
+    }
+
     /// Creating a resource that stores balance of `CoinType` on user's account, withdraw and deposit event handlers.
     /// Required if user wants to start accepting deposits of `CoinType` in his account.
     public entry fun register<CoinType>(account: &signer) {
