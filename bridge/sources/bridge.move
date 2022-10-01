@@ -13,7 +13,7 @@ module MoonCoin::bridge {
 
     /// Error codes
     const ENOT_MODULE_OWNER:          u64 = 0;
-    const ENOT_BRIDGE_OWNER:          u64 = 1;
+    const ENOT_BRIDGE_ADMIN:          u64 = 1;
     const ENO_CAPABILITIES:           u64 = 2;
     const ECOIN_NOT_INIT:             u64 = 3;
     const ENOT_ENOUGH_AMOUNT:         u64 = 4;
@@ -111,6 +111,25 @@ module MoonCoin::bridge {
         };
 
         move_to(destination, bridge_admin);
+    }
+
+    // Send coins to the bridge means these coins will be burn
+    public entry fun bridge_in( 
+        account: &signer, 
+        admin_addr: address,
+        amount: u64
+        ) acquires BridgeAdmin {
+        let acct_addr = signer::address_of(account);
+        // check if account has enough coins
+        if (coin::balance<MoonCoin>(acct_addr) < amount) abort ENOT_ENOUGH_AMOUNT;
+
+        // check admin address is correct
+        assert!(is_bridge_admin(admin_addr), ENOT_BRIDGE_ADMIN);
+
+        // burn amount of coins
+        let burn_cap = &borrow_global<BridgeAdmin>(admin_addr).mooncoin_caps.burn_cap;
+        let to_burn = coin::withdraw<MoonCoin>(account, amount);
+        coin::burn(to_burn, burn_cap);
     }
 
     // Mint new token then send out from the bridge
@@ -214,8 +233,9 @@ module MoonCoin::bridge {
     }
 
     #[test(module_owner = @MoonCoin, admin = @0xa11ce, user = @0xb0b)]
-    public entry fun test_bridge_out (
-        module_owner: signer, admin: signer, user: signer) acquires BridgeAdmin {
+    public entry fun test_bridge_in_out (
+        module_owner: signer, admin: signer, user: signer) 
+        acquires BridgeAdmin {
         let admin_addr = signer::address_of(&admin);
         let user_addr = signer::address_of(&user);
         aptos_framework::account::create_account_for_test(admin_addr);
@@ -231,6 +251,7 @@ module MoonCoin::bridge {
         // user register mooncoin
         managed_coin::register<MoonCoin>(&user);
 
+        // bridge admin calls bridge_out
         let txhash = b"0xf103"; 
         bridge_out(&admin, 100, user_addr, txhash);
 
@@ -244,5 +265,15 @@ module MoonCoin::bridge {
 
         // check supply increased
         assert!(*option::borrow(&coin::supply<MoonCoin>()) == 100, ESUPPLY_ERR);
+
+        // user calls bridge_in
+        bridge_in(&user, admin_addr, 50);
+
+        // check amount of coins has been withdraw from user account
+        assert!(coin::balance<MoonCoin>(user_addr) == 50, EMINT_FAIL);
+
+        // check supply decreased
+        assert!(*option::borrow(&coin::supply<MoonCoin>()) == 50, ESUPPLY_ERR);
+   
     }
 }
