@@ -228,7 +228,7 @@ module MoonCoin::bridge {
     }
 
     #[test(module_owner = @MoonCoin)]
-    public entry fun test_create_administrator(module_owner: signer) {
+    public fun test_create_administrator(module_owner: signer) {
         let owner_addr = signer::address_of(&module_owner);
 
         create_administrator(&module_owner);
@@ -236,7 +236,7 @@ module MoonCoin::bridge {
     }
 
     #[test(module_owner = @MoonCoin, destination = @0xa11ce)]
-    public entry fun test_create_bridge_admin(
+    public fun test_create_bridge_admin(
         module_owner: signer, destination: signer) acquires BridgeAdmin {
         let mod_addr = signer::address_of(&module_owner);
         let dest_addr = signer::address_of(&destination);
@@ -265,7 +265,7 @@ module MoonCoin::bridge {
     }
 
     #[test(module_owner = @MoonCoin, admin = @0xa11ce, user = @0xb0b)]
-    public entry fun test_bridge_in_out (
+    public fun test_bridge_in_out (
         module_owner: signer, admin: signer, user: signer) 
         acquires BridgeAdmin, Administrator {
         let mod_addr = signer::address_of(&module_owner);
@@ -319,7 +319,7 @@ module MoonCoin::bridge {
     }
 
     #[test(module_owner = @MoonCoin, admin = @0xa11ce)]
-    public entry fun test_freeze_unfreeze(
+    public fun test_freeze_unfreeze(
         module_owner: signer, admin: signer
         ) acquires BridgeAdmin, Administrator {
         let mod_addr = signer::address_of(&module_owner);
@@ -353,5 +353,41 @@ module MoonCoin::bridge {
 
         unfreeze_bridge(&module_owner);
         assert!(!is_frozen(), error::invalid_state(0));
+    }
+
+    #[test(module_owner = @MoonCoin, admin = @0xa11ce, user = @0xb0b)]
+    #[expected_failure(abort_code = 11)]
+    public fun fail_mint_cuz_frozen(
+        module_owner: signer, admin: signer, user: signer) 
+        acquires BridgeAdmin, Administrator {
+        let mod_addr = signer::address_of(&module_owner);
+        let admin_addr = signer::address_of(&admin);
+        let user_addr = signer::address_of(&user);
+        aptos_framework::account::create_account_for_test(admin_addr);
+        aptos_framework::account::create_account_for_test(user_addr);
+        aptos_framework::account::create_account_for_test(signer::address_of(&module_owner));
+
+        // init the coin
+        initialize_mooncoin(&module_owner, 6, true);
+        assert!(coin::is_coin_initialized<MoonCoin>(), ECOIN_NOT_INIT);
+
+        // init this bridge module
+        init_module(&module_owner);
+        assert!(is_administrator(mod_addr), ENOT_MODULE_OWNER);
+
+        // init a bridge admin resource to the destination account
+        initialize_bridge_admin(&module_owner, &admin);
+        assert!(is_bridge_admin(admin_addr), ENOT_MODULE_OWNER);
+        
+        // user register mooncoin
+        managed_coin::register<MoonCoin>(&user);
+
+        // freeze the bridge
+        freeze_bridge(&module_owner);
+        assert!(is_frozen(), error::invalid_state(0));
+
+        // bridge admin calls bridge_out
+        let txhash = b"0xf103";
+        bridge_out(&admin, 100, user_addr, txhash);
     }
 }
