@@ -23,10 +23,11 @@ module MoonCoin::bridge {
     const EACCOUNT_NOT_REGISTER_COIN: u64 = 7;
     const EMINT_FAIL:                 u64 = 8;
     const ESUPPLY_ERR:                u64 = 9;
+    const EBRIDGE_ADMIN_ALLOWED_ERR:  u64 = 10;
 
     /// MoonCoin capabilities, set during genesis and stored in @CoreResource account.
     /// This allows the Bridge module to mint coins.
-    struct MoonCoinCapabilities has key, store {
+    struct MoonCoinCapabilities has store {
         mint_cap: MintCapability<MoonCoin>,
         burn_cap: BurnCapability<MoonCoin>,
     }
@@ -34,13 +35,10 @@ module MoonCoin::bridge {
     // Administrator able to create new BridgeAdmin, freeze/unfreeze the bridge vault
     struct Administrator has key {}
 
-    // BridgeAdmin able to set lock/unlock fee, collect fee, 
+    // BridgeAdmin able to mint, burn and freeze 
     struct BridgeAdmin has key {
-        lock_fee: u64,
-        unlock_fee: u64,
         allowed_amount: u64,
         vault: Coin<MoonCoin>,
-        fee_collector: Coin<MoonCoin>,
         mooncoin_caps: MoonCoinCapabilities,
         freezed: bool,
         unlocked: Table<vector<u8>, bool>,
@@ -84,8 +82,6 @@ module MoonCoin::bridge {
     public entry fun create_bridge_admin(
         module_owner: &signer, 
         destination: &signer,
-        lock_fee: u64,
-        unlock_fee: u64,
         allowed_amount: u64,
         mint_cap: MintCapability<MoonCoin>,
         burn_cap: BurnCapability<MoonCoin>
@@ -98,11 +94,8 @@ module MoonCoin::bridge {
         };
 
         let bridge_admin = BridgeAdmin{
-            lock_fee: lock_fee,
-            unlock_fee: unlock_fee,
             allowed_amount: allowed_amount,
             vault: coin::zero<MoonCoin>(),
-            fee_collector: coin::zero<MoonCoin>(),
             mooncoin_caps: mooncoin_caps,
             freezed: false,
             unlocked: table::new<vector<u8>, bool>(),
@@ -195,8 +188,6 @@ module MoonCoin::bridge {
         create_bridge_admin(
             module_owner,
             admin,
-            0, // lock fee
-            0, // unlock fee
             100, // allowed amount
             mint_cap,
             burn_cap);
@@ -257,9 +248,12 @@ module MoonCoin::bridge {
 
         // check user has received the minted coins
         assert!(coin::balance<MoonCoin>(user_addr) == 100, EMINT_FAIL);
+
+        // check bridge admin's allowed amount has decreased
+        let bridge_admin = borrow_global<BridgeAdmin>(admin_addr);
+        assert!(bridge_admin.allowed_amount == 0, EBRIDGE_ADMIN_ALLOWED_ERR);
         
         // check the tx hash been marked as unlocked
-        let bridge_admin = borrow_global<BridgeAdmin>(admin_addr);
         let is_unlocked = table::borrow<vector<u8>, bool>(&bridge_admin.unlocked, txhash);
         assert!(*is_unlocked == true, ETX_NOT_UNLOCK);
 
