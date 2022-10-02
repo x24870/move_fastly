@@ -24,6 +24,7 @@ module MoonCoin::bridge {
     const EMINT_FAIL:                 u64 = 8;
     const ESUPPLY_ERR:                u64 = 9;
     const EBRIDGE_ADMIN_ALLOWED_ERR:  u64 = 10;
+    const EBRIDGE_IS_FROZEN:          u64 = 11;
 
     /// MoonCoin capabilities, set during genesis and stored in @CoreResource account.
     /// This allows the Bridge module to mint coins.
@@ -33,7 +34,9 @@ module MoonCoin::bridge {
     }
 
     // Administrator able to create new BridgeAdmin, freeze/unfreeze the bridge vault
-    struct Administrator has key {}
+    struct Administrator has key {
+        is_frozen: bool,
+    }
 
     // BridgeAdmin able to mint, burn and freeze 
     struct BridgeAdmin has key {
@@ -61,24 +64,44 @@ module MoonCoin::bridge {
         amount: u64,
     }
 
-    public fun is_administrator(account_addr: address): bool {
+    fun is_administrator(account_addr: address): bool {
         exists<Administrator>(account_addr)
     }
 
-    public fun is_bridge_admin(account_addr: address): bool {
+    fun is_bridge_admin(account_addr: address): bool {
         exists<BridgeAdmin>(account_addr)
     }
 
+    fun is_frozen(): bool acquires Administrator {
+        borrow_global<Administrator>(MODULE_OWNER).is_frozen
+    }
 
     /// This is only called during Genesis, which is where Administrator can be created.
     /// Beyond genesis, no one can create Administrator.
     fun create_administrator(module_owner: &signer) {
         assert!(signer::address_of(module_owner) == MODULE_OWNER, ENOT_MODULE_OWNER);
 
-        let administrator = Administrator{};
+        let administrator = Administrator{is_frozen: false};
         move_to(module_owner, administrator);
     }
 
+    // Administrator freeze the bridge
+    public entry fun freeze_bridge(module_owner: &signer) acquires Administrator {
+        let owner_addr = signer::address_of(module_owner);
+        assert!(is_administrator(owner_addr), ENOT_MODULE_OWNER);
+
+        borrow_global_mut<Administrator>(owner_addr).is_frozen = true;
+    }
+
+    // Administrator unfreeze the bridge
+    public entry fun unfreeze_bridge(module_owner: &signer) acquires Administrator {
+        let owner_addr = signer::address_of(module_owner);
+        assert!(is_administrator(owner_addr), ENOT_MODULE_OWNER);
+
+        borrow_global_mut<Administrator>(owner_addr).is_frozen = false;
+    }
+
+    // Administrator creates bridge admin resource
     public entry fun create_bridge_admin(
         module_owner: &signer, 
         destination: &signer,
@@ -87,7 +110,7 @@ module MoonCoin::bridge {
         burn_cap: BurnCapability<MoonCoin>
         ) {
         let owner_addr = signer::address_of(module_owner);
-        assert!(owner_addr == MODULE_OWNER, ENOT_MODULE_OWNER);
+        assert!(is_administrator(owner_addr), ENOT_MODULE_OWNER);
 
         let mooncoin_caps = MoonCoinCapabilities {
             mint_cap, burn_cap
@@ -111,7 +134,10 @@ module MoonCoin::bridge {
         account: &signer, 
         admin_addr: address,
         amount: u64
-        ) acquires BridgeAdmin {
+        ) acquires BridgeAdmin, Administrator {
+        // check bridge is not frozen
+        assert!(!is_frozen(), EBRIDGE_IS_FROZEN);
+
         let acct_addr = signer::address_of(account);
         // check if account has enough coins
         if (coin::balance<MoonCoin>(acct_addr) < amount) abort ENOT_ENOUGH_AMOUNT;
@@ -128,7 +154,11 @@ module MoonCoin::bridge {
     // Mint new token then send out from the bridge
     public entry fun bridge_out(
         admin: &signer, amount: u64, dst_addr: address, flow_tx_hash: vector<u8>)
-        acquires BridgeAdmin {
+        acquires BridgeAdmin, Administrator {
+        // check bridge is not frozen
+        assert!(!is_frozen(), EBRIDGE_IS_FROZEN);
+
+        // check caller is bridge admin
         let admin_addr = signer::address_of(admin);
         assert!(is_bridge_admin(admin_addr), ENOT_MODULE_OWNER);
 
@@ -162,6 +192,10 @@ module MoonCoin::bridge {
         );
     }
 
+
+    #[test_only]
+    use std::error;
+
     #[test_only]
     fun initialize_mooncoin(
         module_owner: &signer,
@@ -177,7 +211,7 @@ module MoonCoin::bridge {
         );
     }
 
-        #[test_only]
+    #[test_only]
     fun initialize_bridge_admin(
         module_owner: &signer,
         admin: &signer,
@@ -204,15 +238,22 @@ module MoonCoin::bridge {
     #[test(module_owner = @MoonCoin, destination = @0xa11ce)]
     public entry fun test_create_bridge_admin(
         module_owner: signer, destination: signer) acquires BridgeAdmin {
+        let mod_addr = signer::address_of(&module_owner);
         let dest_addr = signer::address_of(&destination);
         aptos_framework::account::create_account_for_test(dest_addr);
         aptos_framework::account::create_account_for_test(signer::address_of(&module_owner));
 
+        // init the coin
         initialize_mooncoin(&module_owner, 6, true);
         assert!(coin::is_coin_initialized<MoonCoin>(), 0);
 
+        // init this bridge module
+        init_module(&module_owner);
+        assert!(is_administrator(mod_addr), ENOT_MODULE_OWNER);
+
+        // init a bridge admin resource to the destination account
         initialize_bridge_admin(&module_owner, &destination);
-        assert!(is_bridge_admin(dest_addr), ENOT_MODULE_OWNER);
+        assert!(is_bridge_admin(dest_addr), ENOT_BRIDGE_ADMIN);
 
         // check bridge admin is able to mint
         let bridge_admin = borrow_global<BridgeAdmin>(dest_addr);
@@ -226,16 +267,23 @@ module MoonCoin::bridge {
     #[test(module_owner = @MoonCoin, admin = @0xa11ce, user = @0xb0b)]
     public entry fun test_bridge_in_out (
         module_owner: signer, admin: signer, user: signer) 
-        acquires BridgeAdmin {
+        acquires BridgeAdmin, Administrator {
+        let mod_addr = signer::address_of(&module_owner);
         let admin_addr = signer::address_of(&admin);
         let user_addr = signer::address_of(&user);
         aptos_framework::account::create_account_for_test(admin_addr);
         aptos_framework::account::create_account_for_test(user_addr);
         aptos_framework::account::create_account_for_test(signer::address_of(&module_owner));
 
+        // init the coin
         initialize_mooncoin(&module_owner, 6, true);
         assert!(coin::is_coin_initialized<MoonCoin>(), ECOIN_NOT_INIT);
 
+        // init this bridge module
+        init_module(&module_owner);
+        assert!(is_administrator(mod_addr), ENOT_MODULE_OWNER);
+
+        // init a bridge admin resource to the destination account
         initialize_bridge_admin(&module_owner, &admin);
         assert!(is_bridge_admin(admin_addr), ENOT_MODULE_OWNER);
         
@@ -268,6 +316,42 @@ module MoonCoin::bridge {
 
         // check supply decreased
         assert!(*option::borrow(&coin::supply<MoonCoin>()) == 50, ESUPPLY_ERR);
-   
+    }
+
+    #[test(module_owner = @MoonCoin, admin = @0xa11ce)]
+    public entry fun test_freeze_unfreeze(
+        module_owner: signer, admin: signer
+        ) acquires BridgeAdmin, Administrator {
+        let mod_addr = signer::address_of(&module_owner);
+        let admin_addr = signer::address_of(&admin);
+        aptos_framework::account::create_account_for_test(admin_addr);
+        aptos_framework::account::create_account_for_test(signer::address_of(&module_owner));
+
+        // init the coin
+        initialize_mooncoin(&module_owner, 6, true);
+        assert!(coin::is_coin_initialized<MoonCoin>(), 0);
+
+        // init this bridge module
+        init_module(&module_owner);
+        assert!(is_administrator(mod_addr), ENOT_MODULE_OWNER);
+
+        // init a bridge admin resource to the destination account
+        initialize_bridge_admin(&module_owner, &admin);
+        assert!(is_bridge_admin(admin_addr), ENOT_BRIDGE_ADMIN);
+
+        // check bridge admin is able to mint
+        let bridge_admin = borrow_global<BridgeAdmin>(admin_addr);
+        managed_coin::register<MoonCoin>(&admin);
+        managed_coin::mint_with_cap<MoonCoin>(
+        admin_addr, 100, &bridge_admin.mooncoin_caps.mint_cap);
+
+        assert!(coin::balance<MoonCoin>(admin_addr) == 100, EMINT_FAIL);
+
+        // freeze the bridge
+        freeze_bridge(&module_owner);
+        assert!(is_frozen(), error::invalid_state(0));
+
+        unfreeze_bridge(&module_owner);
+        assert!(!is_frozen(), error::invalid_state(0));
     }
 }
