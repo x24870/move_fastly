@@ -1,10 +1,10 @@
 module MoonCoin::bridge {
     use std::signer;
     use std::option::{Self};
-    use aptos_std::table::{Self, Table};
+    use aptos_std::simple_map::{Self, SimpleMap};
     use aptos_std::event::{Self, EventHandle};
     use MoonCoin::moon_coin::MoonCoin;
-    use aptos_framework::coin::{Self, Coin, BurnCapability, MintCapability};
+    use aptos_framework::coin::{Self, BurnCapability, MintCapability};
     use aptos_framework::managed_coin;
     use aptos_framework::account;
 
@@ -33,7 +33,7 @@ module MoonCoin::bridge {
         burn_cap: BurnCapability<MoonCoin>,
     }
 
-    // Administrator able to create new BridgeAdmin, freeze/unfreeze the bridge vault
+    // Administrator able to create new BridgeAdmin, freeze/unfreeze the bridge
     struct Administrator has key {
         is_frozen: bool,
     }
@@ -41,10 +41,9 @@ module MoonCoin::bridge {
     // BridgeAdmin able to mint, burn and freeze 
     struct BridgeAdmin has key {
         allowed_amount: u64,
-        vault: Coin<MoonCoin>,
         mooncoin_caps: MoonCoinCapabilities,
         freezed: bool,
-        unlocked: Table<vector<u8>, bool>,
+        unlocked: SimpleMap<vector<u8>, bool>,
         bridge_out_events: EventHandle<BridgeOutEvent>,
         bridge_in_events: EventHandle<BridgeInEvent>,
     }
@@ -76,6 +75,31 @@ module MoonCoin::bridge {
         borrow_global<Administrator>(MODULE_OWNER).is_frozen
     }
 
+    fun destory_bridge_admin_resource(bridge_admin: BridgeAdmin) {
+        let BridgeAdmin {
+            allowed_amount: _,
+            mooncoin_caps: mooncoin_caps_,
+            freezed: _,
+            unlocked: _,
+            bridge_out_events: bridge_out_events_,
+            bridge_in_events: bridge_in_events_,
+        } = bridge_admin;
+
+        destory_capabilites_resource(mooncoin_caps_);
+        aptos_std::event::destroy_handle(bridge_out_events_);
+        aptos_std::event::destroy_handle(bridge_in_events_);
+    }
+
+    fun destory_capabilites_resource(caps: MoonCoinCapabilities) {
+        let MoonCoinCapabilities {
+            mint_cap: mint_cap_,
+            burn_cap: burn_cap_,
+        } = caps;
+
+        coin::destroy_mint_cap<MoonCoin>(mint_cap_);
+        coin::destroy_burn_cap<MoonCoin>(burn_cap_);
+    }
+
     /// This is only called during Genesis, which is where Administrator can be created.
     /// Beyond genesis, no one can create Administrator.
     fun create_administrator(module_owner: &signer) {
@@ -101,6 +125,20 @@ module MoonCoin::bridge {
         borrow_global_mut<Administrator>(owner_addr).is_frozen = false;
     }
 
+    // Administrator destroy the bridge admin resource
+    public entry fun destroy_bridge_admin(
+        module_owner: &signer,
+        admin_addr: address,
+    ) acquires BridgeAdmin {
+        let owner_addr = signer::address_of(module_owner);
+        assert!(is_administrator(owner_addr), ENOT_MODULE_OWNER);
+        assert!(is_bridge_admin(admin_addr), ENOT_BRIDGE_ADMIN);
+
+        // get bridge admin resource
+        let bridge_admin = move_from<BridgeAdmin>(admin_addr);
+        destory_bridge_admin_resource(bridge_admin);
+    }
+
     // Administrator creates bridge admin resource
     public entry fun create_bridge_admin(
         module_owner: &signer, 
@@ -118,10 +156,10 @@ module MoonCoin::bridge {
 
         let bridge_admin = BridgeAdmin{
             allowed_amount: allowed_amount,
-            vault: coin::zero<MoonCoin>(),
             mooncoin_caps: mooncoin_caps,
             freezed: false,
-            unlocked: table::new<vector<u8>, bool>(),
+            // unlocked: table_with_length::new<vector<u8>, bool>(),
+            unlocked: simple_map::create<vector<u8>, bool>(),
             bridge_out_events: account::new_event_handle<BridgeOutEvent>(destination),
             bridge_in_events: account::new_event_handle<BridgeInEvent>(destination),
         };
@@ -172,11 +210,14 @@ module MoonCoin::bridge {
         // checking has tx hash unlocked // TODO: Check if default false is valid?
         // let unlocked = table::borrow_mut<vector<u8>, bool>(
         //     &mut bridge_admin.unlocked, flow_tx_hash);
-        let unlocked = table::borrow_mut_with_default<vector<u8>, bool>(
-            &mut bridge_admin.unlocked, flow_tx_hash, false);
+        assert!(simple_map::contains_key<vector<u8>, bool>(
+            &bridge_admin.unlocked, &flow_tx_hash) == false, ETX_HAS_OUT);
 
-        if (*unlocked == true) abort ETX_HAS_OUT;
-        *unlocked = true;
+        simple_map::add<vector<u8>, bool>(&mut bridge_admin.unlocked, flow_tx_hash, false);
+
+        let is_unlocked = simple_map::borrow_mut<vector<u8>, bool>(&mut bridge_admin.unlocked, &flow_tx_hash);
+        if (*is_unlocked == true) abort ETX_HAS_OUT;
+        *is_unlocked = true;
 
         // check account has registered the coin
         assert!(coin::is_account_registered<MoonCoin>(dst_addr), EACCOUNT_NOT_REGISTER_COIN);
@@ -302,7 +343,7 @@ module MoonCoin::bridge {
         assert!(bridge_admin.allowed_amount == 0, EBRIDGE_ADMIN_ALLOWED_ERR);
         
         // check the tx hash been marked as unlocked
-        let is_unlocked = table::borrow<vector<u8>, bool>(&bridge_admin.unlocked, txhash);
+        let is_unlocked = simple_map::borrow<vector<u8>, bool>(&bridge_admin.unlocked, &txhash);
         assert!(*is_unlocked == true, ETX_NOT_UNLOCK);
 
         // check supply increased
