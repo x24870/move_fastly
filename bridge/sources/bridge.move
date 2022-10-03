@@ -357,6 +357,12 @@ module MoonCoin::bridge {
 
         // check supply decreased
         assert!(*option::borrow(&coin::supply<MoonCoin>()) == 50, ESUPPLY_ERR);
+
+        // destroy bridge admin resource
+        destroy_bridge_admin(&module_owner, admin_addr);
+
+        // check this account is not admin anymore
+        assert!(is_bridge_admin(admin_addr) == false, error::invalid_state(0));
     }
 
     #[test(module_owner = @MoonCoin, admin = @0xa11ce)]
