@@ -1,28 +1,30 @@
 # Pick up Move quickly
 
 ## Local dev environment setup
+
+### Pre-requirement
+Make sure you have installed [aptos-cli](https://aptos.dev/cli-tools/aptos-cli-tool/install-aptos-cli/)
+
 ### Start a local testnet
 ```
  aptos node run-local-testnet --with-faucet
 ```
 Default REST API endpoind would be:
-
 `http://0.0.0.0:8080`
 
 Default faucet endpoint would be:
-
 `http://0.0.0.0:8081`
 
-### Init an account on local testnet
+### initialze a profile on local testnet
+Open another terminal and initialze an local account
 ```
 aptos init --profile local --rest-url "http://0.0.0.0:8080" --faucet-url "http://0.0.0.0:8081"
 ```
 
-### Fund your account will massive amount of tokens
+Fund your account
 ```
 aptos account fund-with-faucet --profile local --account local --amount 99999999
 ```
-Congrats, you are a rich mother fucker now (on testnet)
 
 ---
 ## Compile and publish your module
