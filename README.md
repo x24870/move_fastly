@@ -5,9 +5,12 @@
 ### Pre-requirement
 Make sure you have installed [aptos-cli](https://aptos.dev/cli-tools/aptos-cli-tool/install-aptos-cli/)
 
-### Start a local testnet
+**NOTE**: *Make commands in this document are shortcuts, you can check origin aptos cli commands in the Makefile*
+
+### Setup local testnet and profiles
+Run a local testnet
 ```
- aptos node run-local-testnet --with-faucet
+make local_net
 ```
 Default REST API endpoind would be:
 `http://0.0.0.0:8080`
@@ -15,15 +18,42 @@ Default REST API endpoind would be:
 Default faucet endpoint would be:
 `http://0.0.0.0:8081`
 
-### initialze a profile on local testnet
-Open another terminal and initialze an local account
+Init profiles
 ```
-aptos init --profile local --rest-url "http://0.0.0.0:8080" --faucet-url "http://0.0.0.0:8081"
+make init_profiles
 ```
 
-Fund your account
+fund accounts of these profiles
 ```
-aptos account fund-with-faucet --profile local --account local --amount 99999999
+make fund
+```
+
+## Example 1 - Counter
+
+### Compile and publish the counter module
+Module owner compile the module
+```
+make compile_counter
+```
+
+Module owner publish the module
+```
+make publish_counter
+```
+
+User initialize a counter resource with value 0 and store it to his account global storage
+```
+make init_counter
+```
+
+User increase the count
+```
+make incr_counter
+```
+
+User check his counter resource, the value should increased
+```
+make query_user_resource
 ```
 
 ---

@@ -4,65 +4,66 @@ FAUCET_URL=http://0.0.0.0:8081
 REST_URL=http://0.0.0.0:8080
 PACKAGE_DIR=counter
 
-dev_net:
-	aptos init --profile default
-
+# env
 local_net:
 	aptos node run-local-testnet --with-faucet
 
-local_cli:
-	aptos init --profile ${PROFILE} --rest-url ${REST_URL} --faucet-url ${FAUCET_URL} 
+init_profiles:
+	aptos init --profile local --rest-url ${REST_URL} --faucet-url ${FAUCET_URL}
+	aptos init --profile owner --rest-url ${REST_URL} --faucet-url ${FAUCET_URL}
+	aptos init --profile user --rest-url ${REST_URL} --faucet-url ${FAUCET_URL}
 
 acct_list:
 	aptos account list --profile ${PROFILE}
 
 fund:
-	aptos account fund-with-faucet --profile ${PROFILE} --account ${PROFILE} --amount 99999999
+	aptos account fund-with-faucet --profile ${PROFILE} --account local --amount 99999999
+	aptos account fund-with-faucet --profile ${PROFILE} --account owner --amount 99999999
+	aptos account fund-with-faucet --profile ${PROFILE} --account user --amount 99999999
 
-compile_hello:
-	# aptos move compile --package-dir hello_blockchain --named-addresses MyAddr=default
-	aptos move compile --package-dir hello_blockchain --named-addresses MyAddr=default
-
+# counter
 compile_counter:
-	aptos move compile --package-dir counter --named-addresses MyAddr="default"
+	aptos move compile --package-dir counter --named-addresses owner=owner
 
+publish_counter:
+	aptos move publish --assume-yes --package-dir counter --sender-account owner --named-addresses owner=owner --profile owner
+
+init_counter:
+	aptos move run --assume-yes --function-id owner::MyCounter::init_counter --sender-account user --profile user
+
+incr_counter:
+	aptos move run --assume-yes --function-id owner::MyCounter::incr_counter --sender-account user --profile user
+
+# hello
+compile_hello:
+	aptos move compile --package-dir hello_blockchain --named-addresses owner=owner,user=user
+
+init_hello:
+	aptos move run-script --compiled-script-path hello_blockchain/build/Examples/bytecode_scripts/get_msg.mv --sender-account=local --profile=local
+
+# bridge
 compile_bridge:
 	aptos move compile --package-dir bridge  --named-addresses MoonCoin=${ACCOUNT}
 
 test_bridge:
 	aptos move test --package-dir bridge --named-addresses MoonCoin=default
 
-init_counter:
-	aptos move run --function-id '${ACCOUNT}::MyCounter::init_counter' --profile=${PROFILE}
-
-incr_counter:
-	aptos move run --function-id '${ACCOUNT}::MyCounter::incr_counter' --profile=${PROFILE}
-
+# query
 query_module:
 	aptos account list --query modules --account ${ACCOUNT} --profile ${PROFILE}
 
-query_resource:
-	aptos account list --query resources --account ${ACCOUNT} --profile ${PROFILE}
+query_user_resource:
+	aptos account list --query resources --account user --profile user
 
-publish_contract:
-	aptos move publish --package-dir counter --sender-account default --named-addresses MyAddr=default  --profile default
-
-publish_counter:
-	aptos move publish --package-dir counter --sender-account ${ACCOUNT} --named-addresses MyAddr=${ACCOUNT} --profile ${PROFILE}
+publish_hello:
+	aptos move publish --package-dir hello_blockchain --sender-account local --named-addresses owner=local,user=user  --profile ${PROFILE}
 
 trasaction:
 	aptos move run --function-id 9b1c945889a5be2b46140b3307eba15db4ca2c5d03b63aeca97769bda7fab65e::<Moudle_Name>::<Function_Name> --profile default
 
-call_contract:
-	aptos move run --function-id :::: --profile ${PROFILE}
-
 
 ### execute move scripts
 script_incr_counter:
-	# there is some issue on 'run-script'
-	# aptos move run-script --script-path scripts/counter_incr.move --sender-account=${ACCOUNT} --profile=${PROFILE}
-	# execute through aptos python sdk
-	# move to sdk folder: $cd sdk
 	poetry run python -m examples.incr_counter
 
 ### nft

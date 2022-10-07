@@ -3,7 +3,7 @@ name = "Counter"
 version = "0.0.0"
 
 [addresses]
-MyAddr = "_"
+owner = "_"
 
 [dependencies.MoveStdlib]
 git = 'https://github.com/aptos-labs/aptos-core.git'
