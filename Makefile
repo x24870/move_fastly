@@ -26,20 +26,34 @@ compile_counter:
 	aptos move compile --package-dir counter --named-addresses owner=owner
 
 publish_counter:
-	aptos move publish --assume-yes --package-dir counter --sender-account owner --named-addresses owner=owner --profile owner
+	aptos move publish --assume-yes --package-dir counter \
+	--sender-account owner --named-addresses owner=owner --profile owner
 
 init_counter:
-	aptos move run --assume-yes --function-id owner::MyCounter::init_counter --sender-account user --profile user
+	aptos move run --assume-yes --function-id owner::MyCounter::init_counter \
+	--sender-account user --profile user
 
 incr_counter:
-	aptos move run --assume-yes --function-id owner::MyCounter::incr_counter --sender-account user --profile user
+	aptos move run --assume-yes --function-id owner::MyCounter::incr_counter \
+	--sender-account user --profile user
 
-# hello
-compile_hello:
-	aptos move compile --package-dir hello_blockchain --named-addresses owner=owner,user=user
+# message
+compile_message:
+	aptos move compile --package-dir message --named-addresses owner=owner,user=user
 
-init_hello:
-	aptos move run-script --compiled-script-path hello_blockchain/build/Examples/bytecode_scripts/get_msg.mv --sender-account=local --profile=local
+publish_message:
+	aptos move publish --assume-yes --package-dir message \
+	--sender-account owner --named-addresses owner=owner,user=user --profile owner
+
+set_message:
+	aptos move run-script --assume-yes \
+	--compiled-script-path message/build/Message/bytecode_scripts/set_message.mv \
+	--sender-account=user --profile=user
+
+print_message:
+	aptos move run-script --assume-yes \
+	--compiled-script-path message/build/Message/bytecode_scripts/print_message.mv \
+	--sender-account=user --profile=user
 
 # bridge
 compile_bridge:

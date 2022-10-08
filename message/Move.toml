@@ -1,9 +1,10 @@
 [package]
-name = "Examples"
-version = "0.0.0"
+name = "Message"
+version = "0.1.0"
 
 [addresses]
-MyAddr = "_"
+owner = "_"
+user = "_"
 
 [dependencies.MoveStdlib]
 git = 'https://github.com/aptos-labs/aptos-core.git'

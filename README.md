@@ -57,41 +57,29 @@ make query_user_resource
 ```
 
 ---
-## Compile and publish your module
-### Compile the Counter module
+## Example 2 - Message Book
+
+Module owner compile the module
 ```
-aptos move compile --package-dir counter --named-addresses MyAddr="local"
+make compile_message
 ```
 
-### Publish the Counter module
+Module owner publish the module
 ```
-aptos move publish --package-dir counter --sender-account local --named-addresses MyAddr=local --profile local
-```
-
-### Checkout the published module in your account
-```
-aptos account list --query modules --account local --profile local
+make publish_message
 ```
 
----
-## Interact with the on-chain module
-### Init a counter resource in the account
+User set message of message holder resource under his account
 ```
-aptos move run --function-id 'local::MyCounter::init_counter' --profile local
+make set_message
 ```
 
-### Increase the count by 1
+User check his message holder resource, should get the message 'ABC123' that we wrote in the *set_message* script
 ```
-aptos move run --function-id 'local::MyCounter::incr_counter' --profile local
-```
-
-### Check out the count number of counter in your accout
-```
-aptos account list --query resources --account local --profile local
+make query_user_resource
 ```
 
-### Use script to interact with the Counter module 
-(seems aptos-cli run-script not include the stdlib, still figuring out how to use stdlib...)
+Or you can use this script to print user's message. Checkout the terminal that you run the local testnet, you shoud see the hex code of 'ABC123'
 ```
-aptos move run-script --script-path scripts/counter_incr.move --sender-account local --profile local
+make print_message
 ```

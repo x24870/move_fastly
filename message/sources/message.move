@@ -1,6 +1,7 @@
-module MyAddr::message {
+module owner::message {
     use std::error;
     use std::signer;
+    use std::debug;
     use std::string;
     use aptos_framework::account;
     use aptos_std::event;
@@ -23,6 +24,12 @@ module MyAddr::message {
     public fun get_message(addr: address): string::String acquires MessageHolder {
         assert!(exists<MessageHolder>(addr), error::not_found(ENO_MESSAGE));
         *&borrow_global<MessageHolder>(addr).message
+    }
+
+    public entry fun print_message(addr: address) acquires MessageHolder {
+        assert!(exists<MessageHolder>(addr), error::not_found(ENO_MESSAGE));
+        let msg = borrow_global<MessageHolder>(addr).message;
+        debug::print(&msg);
     }
 
     public entry fun set_message(account: signer, message: string::String)
