@@ -57,10 +57,10 @@ print_message:
 
 # bridge
 compile_bridge:
-	aptos move compile --package-dir bridge  --named-addresses MoonCoin=${ACCOUNT}
+	aptos move compile --package-dir bridge --named-addresses BridgeOwner=owner,MoonCoinOwner=user
 
 test_bridge:
-	aptos move test --package-dir bridge --named-addresses MoonCoin=default
+	aptos move test --package-dir bridge --named-addresses BridgeOwner=owner,MoonCoinOwner=user
 
 # query
 query_module:
