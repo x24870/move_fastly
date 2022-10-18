@@ -5,7 +5,7 @@ REST_URL=http://0.0.0.0:8080
 PACKAGE_DIR=counter
 
 # env
-local_net:
+local_testnet:
 	aptos node run-local-testnet --with-faucet
 
 init_profiles:
@@ -62,6 +62,38 @@ compile_bridge:
 test_bridge:
 	aptos move test --package-dir bridge --named-addresses BridgeOwner=owner,MoonCoinOwner=user
 
+### nft
+compile_nft:
+	aptos move compile --package-dir nft --named-addresses owner=default
+
+test_nft:
+	aptos move test --package-dir nft --named-addresses owner=owner
+
+publish_nft:
+	aptos move publish --assume-yes --package-dir nft \
+	--sender-account owner --named-addresses owner=owner --profile owner
+
+claim_mint:
+	aptos move run-script --assume-yes \
+	--compiled-script-path nft/build/Moonkey/bytecode_scripts/claim_mint.mv \
+	--sender-account=user --profile=user
+
+query_user_resource:
+	aptos account list --query resources --account user --profile user
+
+# create_collection:
+# 	poetry run python -m examples.create_collection
+
+# create_token:
+# 	poetry run python -m examples.create_token
+
+# vault
+compile_vault:
+	aptos move compile --package-dir vault --named-addresses owner=owner
+
+test_vault:
+	aptos move test --package-dir vault --named-addresses owner=owner
+
 # query
 query_module:
 	aptos account list --query modules --account ${ACCOUNT} --profile ${PROFILE}
@@ -80,12 +112,4 @@ trasaction:
 script_incr_counter:
 	poetry run python -m examples.incr_counter
 
-### nft
-create_collection:
-	poetry run python -m examples.create_collection
 
-create_token:
-	poetry run python -m examples.create_token
-
-transfer:
-	echo "todo"
