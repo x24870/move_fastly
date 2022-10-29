@@ -87,12 +87,17 @@ query_user_resource:
 # create_token:
 # 	poetry run python -m examples.create_token
 
-# vault
-compile_vault:
-	aptos move compile --package-dir vault --named-addresses owner=owner
+# upgraded counter
+compile_upgrade_counter:
+	aptos move compile --package-dir upgrade_counter --named-addresses owner=owner
 
-test_vault:
-	aptos move test --package-dir vault --named-addresses owner=owner
+publish_upgrade_counter:
+	aptos move publish --assume-yes --package-dir upgrade_counter \
+	--sender-account owner --named-addresses owner=owner --profile owner
+
+reset_counter:
+	aptos move run --assume-yes --function-id owner::MyCounter::reset_counter \
+	--sender-account user --profile user
 
 # query
 query_module:
