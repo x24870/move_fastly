@@ -81,12 +81,6 @@ claim_mint:
 query_user_resource:
 	aptos account list --query resources --account user --profile user
 
-# create_collection:
-# 	poetry run python -m examples.create_collection
-
-# create_token:
-# 	poetry run python -m examples.create_token
-
 # upgraded counter
 compile_upgrade_counter:
 	aptos move compile --package-dir upgrade_counter --named-addresses owner=owner
@@ -98,7 +92,7 @@ publish_upgrade_counter:
 reset_counter:
 	aptos move run --assume-yes --function-id owner::MyCounter::reset_counter \
 	--sender-account user --profile user
-
+	
 # query
 query_module:
 	aptos account list --query modules --account ${ACCOUNT} --profile ${PROFILE}
