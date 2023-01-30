@@ -1,6 +1,5 @@
 module owner::MyCounter {
     use std::signer;
-    use std::string;
 
     struct Counter has key, store {
         value:u64,

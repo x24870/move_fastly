@@ -145,7 +145,7 @@ module MoonCoinOwner::mooncoin {
     }
 
     // Create new coins with provided mint capability and deposit them into dst_addr's account.
-    public entry fun mint_with_cap(
+    public fun mint_with_cap(
         dst_addr: address,
         amount: u64,
         mint_cap: &MintCapability<MoonCoin>,

@@ -223,6 +223,7 @@ module BridgeOwner::bridge {
 
     #[test_only]
     use std::error;
+    #[test_only]
     use std::option;
 
     #[test_only]
